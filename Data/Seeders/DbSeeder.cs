@@ -7,19 +7,19 @@ public static class DbSeeder
 {
     public static void Initialize(AppDbContext db)
     {
-        // ✅ First, seed the client
+        // ✅ PaddlePlace seed — only runs if the DB is completely empty
         if (!db.Clients.Any())
         {
             var client = new Client
             {
                 Id = Guid.NewGuid(),
-                Name = "PickleJoe",
-                Subdomain = "picklejoe", // Matches your frontend's x-client-subdomain
+                Name = "PaddlePlace",
+                Subdomain = "paddleplace",
                 LogoUrl = null,
-                PrimaryColor = "#1A2E1A",
-                AccentColor = "#C9A94E",
-                GcashNumber = "0917 234 5678",
-                GcashAccountName = "PickleJoe Courts",
+                PrimaryColor = "#1A2E1A",     // ← replace with PaddlePlace's brand color
+                AccentColor = "#C9A94E",      // ← replace with PaddlePlace's accent
+                GcashNumber = "0917 000 0000",   // ← replace with PaddlePlace's GCash
+                GcashAccountName = "PaddlePlace", // ← replace
                 CreatedAt = DateTime.UtcNow,
                 Status = "active"
             };
@@ -27,10 +27,9 @@ public static class DbSeeder
             db.Clients.Add(client);
             db.SaveChanges();
 
-            // Get the client ID to associate with courts
             var clientId = client.Id;
 
-            // Seed Courts with the client ID
+            // ✅ Seed courts
             if (!db.Courts.Any())
             {
                 var courts = new List<Court>
@@ -39,15 +38,15 @@ public static class DbSeeder
                     {
                         Id = Guid.NewGuid(),
                         ClientId = clientId,
-                        Name = "Cedar Court",
+                        Name = "Court 1",
                         Type = "indoor",
                         Indoor = true,
-                        PricePerHour = 350,
-                        PeakPricePerHour = 450,
-                        Description = "Premium indoor court with professional-grade flooring",
+                        PricePerHour = 350,      // ← change for PaddlePlace
+                        PeakPricePerHour = 450,  // ← change
+                        Description = "Indoor court",
                         ImageUrl = "https://images.unsplash.com/photo-1534438327276-14e5300c3a48",
                         Images = new List<string> { "https://images.unsplash.com/photo-1534438327276-14e5300c3a48" },
-                        Amenities = new List<string> { "WiFi", "Air Conditioning", "Lighting", "Showers" },
+                        Amenities = new List<string> { "WiFi", "Lighting" },
                         Rating = 4.8,
                         Status = "active",
                         OpenTime = new TimeOnly(8, 0),
@@ -59,41 +58,21 @@ public static class DbSeeder
                     {
                         Id = Guid.NewGuid(),
                         ClientId = clientId,
-                        Name = "Pine Grove Court",
-                        Type = "outdoor",
-                        Indoor = false,
-                        PricePerHour = 280,
-                        PeakPricePerHour = 380,
-                        Description = "Open-air court surrounded by greenery",
-                        ImageUrl = "https://images.unsplash.com/photo-1622163642998-1ea32b0bbc67",
-                        Images = new List<string> { "https://images.unsplash.com/photo-1622163642998-1ea32b0bbc67" },
-                        Amenities = new List<string> { "WiFi", "Lighting", "Parking" },
-                        Rating = 4.5,
-                        Status = "active",
-                        OpenTime = new TimeOnly(8, 0),
-                        CloseTime = new TimeOnly(20, 0),
-                        Dimensions = "44ft x 20ft",
-                        Surface = "Hardcourt"
-                    },
-                    new Court
-                    {
-                        Id = Guid.NewGuid(),
-                        ClientId = clientId,
-                        Name = "Mosswood Arena",
+                        Name = "Court 2",
                         Type = "indoor",
                         Indoor = true,
-                        PricePerHour = 500,
-                        PeakPricePerHour = 650,
-                        Description = "Flagship court with stadium seating",
-                        ImageUrl = "https://images.unsplash.com/photo-1554068865-24cecd4e34b8",
-                        Images = new List<string> { "https://images.unsplash.com/photo-1554068865-24cecd4e34b8" },
-                        Amenities = new List<string> { "WiFi", "Air Conditioning", "Lighting", "Showers", "Pro Shop" },
-                        Rating = 4.9,
+                        PricePerHour = 350,
+                        PeakPricePerHour = 450,
+                        Description = "Indoor court",
+                        ImageUrl = "https://images.unsplash.com/photo-1622163642998-1ea32b0bbc67",
+                        Images = new List<string> { "https://images.unsplash.com/photo-1622163642998-1ea32b0bbc67" },
+                        Amenities = new List<string> { "WiFi", "Lighting" },
+                        Rating = 4.5,
                         Status = "active",
                         OpenTime = new TimeOnly(8, 0),
                         CloseTime = new TimeOnly(22, 0),
                         Dimensions = "44ft x 20ft",
-                        Surface = "Premium Cushion"
+                        Surface = "Cushion"
                     }
                 };
 
@@ -101,15 +80,17 @@ public static class DbSeeder
                 db.SaveChanges();
             }
 
-            // Seed admin user if empty
+            // ✅ Seed admin user
             if (!db.Users.Any())
             {
                 var admin = new User
                 {
                     Id = Guid.NewGuid(),
-                    Email = "admin@picklejoe.com",
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin123!"),
-                    Name = "Admin User",
+                    ClientId = clientId,
+                    Email = "admin@paddleplace.ph",     // ← change to PaddlePlace's admin email
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("ChangeMe123!"), // ← change
+                    Name = "PaddlePlace Admin",
+                    Phone = "",
                     Role = "admin",
                     Status = "active",
                     CreatedAt = DateTime.UtcNow

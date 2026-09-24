@@ -58,22 +58,18 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ClientResolver>();
 builder.Services.AddScoped<IClientService, ClientService>();
 
-// ✅ Add Health Checks
+// Health Checks
 builder.Services.AddHealthChecks();
 
 builder.Services.AddSwaggerGen();
 
-// ✅ UPDATED: Added new frontend domain to CORS allowed origins
+// CORS — driven entirely by appsettings.json + env vars.
+// For PaddlePlace, set Cors__AllowedOrigins__0, __1, ... on Render.
 var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-    ?? new[] {
+    ?? new[]
+    {
         "http://localhost:5173",
-        "http://localhost:3000",
-        "https://sideout-playground.vercel.app",
-        "https://sideoutplayground.vercel.app",
-        "https://pickleball-client2.vercel.app",
-        "https://pickle-joe-booking-sys.vercel.app",      // Old domain
-        "https://centercourt-booking.vercel.app",         // ✅ NEW domain
-        "https://picklejoe.vercel.app"
+        "http://localhost:3000"
     };
 
 builder.Services.AddCors(options =>
@@ -87,19 +83,34 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// ✅ FIX: Make this async properly
+// Seed the database — safe to run every startup
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    // Only seeds if the DB is completely empty.
+    // For a fresh PaddlePlace DB, this does nothing — you'll insert the client row manually.
     DbSeeder.Initialize(db);
 
-    var clientService = scope.ServiceProvider.GetRequiredService<IClientService>();
-    Guid clientId;
-    try
+    // Resolve the client for housekeeping tasks.
+    // Tries env var CONFIG first, falls back to first client in the DB.
+    var subdomain = builder.Configuration["Client:Subdomain"];
+    Guid clientId = Guid.Empty;
+
+    if (!string.IsNullOrWhiteSpace(subdomain))
     {
-        clientId = await clientService.GetClientIdBySubdomainAsync("picklejoe");
+        try
+        {
+            var clientService = scope.ServiceProvider.GetRequiredService<IClientService>();
+            clientId = await clientService.GetClientIdBySubdomainAsync(subdomain);
+        }
+        catch
+        {
+            // ignore — will fall back below
+        }
     }
-    catch
+
+    if (clientId == Guid.Empty)
     {
         var firstClient = await db.Clients.FirstOrDefaultAsync();
         clientId = firstClient?.Id ?? Guid.Empty;
