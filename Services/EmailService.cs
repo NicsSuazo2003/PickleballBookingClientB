@@ -8,28 +8,33 @@ public class EmailService
     private readonly IConfiguration _config;
     private readonly ILogger<EmailService> _logger;
 
-    private const string OUTER_BG = "#0D1A0D";  // forest-950
-    private const string BODY_BG = "#1A2E1A";  // forest-900
-    private const string CARD_BG = "#243024";  // forest-800
-    private const string BANNER_BG = "#2A3A2A";  // forest-700
-    private const string DIVIDER = "#324232";  // forest-600
-    private const string BORDER_SOFT = "#3A4A3A";  // forest-500
+    // ═════════════════════════════════════════════════════════════
+    // 🎨 Paddle Place Tailwind Theme Palette
+    // ═════════════════════════════════════════════════════════════
+    // Core Backgrounds (brand-teal darks)
+    private const string OUTER_BG = "#030E0F";     // brand-teal-950
+    private const string BODY_BG = "#061A1C";      // brand-teal-900
+    private const string CARD_BG = "#092629";      // brand-teal-800
+    private const string BANNER_BG = "#0B3438";    // brand-teal-700
+    private const string DIVIDER = "#0E4348";      // brand-teal-600
+    private const string BORDER_SOFT = "#115259";  // brand-teal-500
 
-    private const string ACCENT = "#D4AF37";  // gold-400
-    private const string ACCENT_TEXT = "#0D1A0D";  // forest-950 (dark text on gold)
-    private const string ACCENT_SOFT = "#EAD79E";  // gold-200
-    private const string GOLD_300 = "#DEC36E";  // gold-300
+    // Primary Accents (mint & teal)
+    private const string ACCENT = "#B6DAC8";       // mint-400
+    private const string ACCENT_TEXT = "#0E4348";  // brand-teal-600
+    private const string ACCENT_TEAL = "#115259";  // brand-teal-500
+    private const string MINT_LIGHT = "#DDEFE6";   // mint-200
 
-    private const string CYAN = "#22D3EE";  // cyan-400 (Open Play — keep)
-    private const string TEXT_CREAM = "#F5F0E8";  // cream
-    private const string TEXT_CREAM_MUTED = "#B8B0A0";  // cream-muted
-    private const string TEXT_CREAM_SOFT = "#E8E0D2";  // cream-dark
+    // Typography Neutrals (cream & sage)
+    private const string TEXT_CREAM = "#F8FAF9";       // cream DEFAULT
+    private const string TEXT_CREAM_SOFT = "#D3DFDD";  // sage-200
+    private const string TEXT_CREAM_MUTED = "#8CA59F"; // cream.muted / sage-400
 
-    private const string DANGER = "#E74C3C";  // error
-    private const string WARNING = "#F39C12";  // warning
-    private const string SUCCESS = "#2ECC71";  // success
-    private const string PURPLE = "#A78BFA";  // refund (no tailwind equivalent)
-
+    // Status Utilities
+    private const string SUCCESS = "#1B9A59";      // success
+    private const string DANGER = "#E04F44";       // error
+    private const string WARNING = "#E59B23";      // warning
+    private const string PURPLE = "#A78BFA";       // refund
 
     public EmailService(IConfiguration config, ILogger<EmailService> logger)
     {
@@ -88,7 +93,7 @@ public class EmailService
     }
 
     // ═════════════════════════════════════════════════════════════
-    // 🎨 Shared layout — Forest Green theme
+    // 🎨 Shared layout — Deep Teal & Court Mint theme
     // ═════════════════════════════════════════════════════════════
     private static string WrapLayout(string bannerTitle, string contentHtml)
     {
@@ -99,20 +104,20 @@ public class EmailService
 <meta charset='UTF-8'>
 <meta name='viewport' content='width=device-width,initial-scale=1'>
 <meta name='color-scheme' content='dark light'>
-<title>Center Court</title>
+<title>Paddle Place</title>
 </head>
-<body style='margin:0;padding:0;background-color:{OUTER_BG};font-family:-apple-system,BlinkMacSystemFont,""Segoe UI"",Roboto,Helvetica,Arial,sans-serif;'>
+<body style='margin:0;padding:0;background-color:{OUTER_BG};font-family:Inter,-apple-system,BlinkMacSystemFont,""Segoe UI"",Roboto,Helvetica,Arial,sans-serif;'>
   <table role='presentation' width='100%' cellpadding='0' cellspacing='0' border='0' style='background-color:{OUTER_BG};padding:24px 12px;'>
     <tr>
       <td align='center'>
 
-        <table role='presentation' width='100%' cellpadding='0' cellspacing='0' border='0' style='max-width:560px;background-color:{BODY_BG};border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.5);'>
+        <table role='presentation' width='100%' cellpadding='0' cellspacing='0' border='0' style='max-width:560px;background-color:{BODY_BG};border-radius:16px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,0.45);border:1px solid {BORDER_SOFT};'>
 
-          <!-- ░░ Forest Green banner header ░░ -->
+          <!-- ░░ Deep Teal banner header ░░ -->
           <tr>
             <td style='background-color:{BANNER_BG};border-bottom:1px solid {DIVIDER};padding:26px 32px 22px;text-align:left;'>
-              <div style='font-size:11px;font-weight:800;letter-spacing:2.5px;color:{ACCENT};text-transform:uppercase;margin-bottom:6px;font-family:-apple-system,BlinkMacSystemFont,""Segoe UI"",Roboto,Helvetica,Arial,sans-serif;'>
-                CENTER COURT
+              <div style='font-size:11px;font-weight:800;letter-spacing:2.5px;color:{ACCENT};text-transform:uppercase;margin-bottom:6px;font-family:Fredoka,Montserrat,-apple-system,BlinkMacSystemFont,sans-serif;'>
+                PADDLE PLACE
               </div>
               <div style='font-size:24px;font-weight:800;color:{TEXT_CREAM};line-height:1.2;margin:0;letter-spacing:-0.3px;'>
                 {bannerTitle}
@@ -129,7 +134,7 @@ public class EmailService
 
           <!-- ░░ Footer ░░ -->
           <tr>
-            <td style='padding:20px 32px 26px;border-top:1px solid {DIVIDER};'>
+            <td style='padding:20px 32px 26px;border-top:1px solid {DIVIDER};background-color:{BODY_BG};'>
               <div style='font-size:11px;color:{TEXT_CREAM_MUTED};text-align:center;line-height:1.6;'>
                 Book Your Court. Play Your Game.<br>
                 Automated message — please do not reply directly.
@@ -145,7 +150,7 @@ public class EmailService
 </html>";
     }
 
-    // 🧱 Key-value row — cream label + white value
+    // 🧱 Key-value row — cream label + crisp light value
     private static string KvRow(string label, string value, bool isLast = false)
     {
         var border = isLast ? "" : $"border-bottom:1px solid {DIVIDER};";
@@ -162,14 +167,14 @@ public class EmailService
               </tr>";
     }
 
-    // 🎯 Gold CTA button — kept gold (primary action color)
+    // 🎯 Mint CTA button — styled with mint-400 bg and dark brand-teal text
     private static string CtaButton(string url, string text)
     {
         return $@"
               <table role='presentation' cellpadding='0' cellspacing='0' border='0' style='margin-top:28px;'>
                 <tr>
-                  <td align='center' style='border-radius:10px;background-color:{ACCENT};'>
-                    <a href='{url}' target='_blank' style='display:inline-block;padding:13px 30px;font-size:14px;font-weight:700;color:{ACCENT_TEXT};text-decoration:none;border-radius:10px;'>
+                  <td align='center' style='border-radius:12px;background-color:{ACCENT};'>
+                    <a href='{url}' target='_blank' style='display:inline-block;padding:13px 30px;font-size:14px;font-weight:800;color:{ACCENT_TEXT};text-decoration:none;border-radius:12px;letter-spacing:0.2px;'>
                       {text}
                     </a>
                   </td>
@@ -177,7 +182,7 @@ public class EmailService
               </table>";
     }
 
-    // 🏷 Status chip — forest-friendly with border + soft fill
+    // 🏷 Status chip — badge with soft tint & clean border
     private static string StatusChip(string text, string color)
     {
         return $@"
@@ -257,10 +262,10 @@ public class EmailService
                 Hi {customerName},
               </p>
               <p style='margin:0 0 24px;font-size:15px;line-height:1.65;color:{TEXT_CREAM_SOFT};'>
-                Great news — your booking has been <strong style='color:{CYAN};font-weight:700;'>confirmed</strong>. See you on the court!
+                Great news — your booking has been <strong style='color:{ACCENT};font-weight:700;'>confirmed</strong>. See you on the court!
               </p>
 
-              {StatusChip("Paid", CYAN)}
+              {StatusChip("Paid & Confirmed", ACCENT)}
 
               <table role='presentation' width='100%' cellpadding='0' cellspacing='0' border='0'>
                 {KvRow("Reference", referenceCode)}
@@ -518,7 +523,7 @@ public class EmailService
 
         var payload = new
         {
-            sender = new { email = senderEmail, name = senderName ?? "Center Court" },
+            sender = new { email = senderEmail, name = senderName ?? "Paddle Place" },
             to = new[] { new { email = toEmail, name = toName } },
             subject,
             htmlContent = html
