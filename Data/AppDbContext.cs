@@ -59,6 +59,11 @@ public class AppDbContext : DbContext
             e.Property(c => c.PaymentMethods)
                 .HasColumnName("payment_methods")
                 .HasColumnType("jsonb");
+
+            e.Property(c => c.AvailableAmenities)
+    .HasColumnName("available_amenities")
+    .HasColumnType("jsonb");
+
             e.Property(c => c.CreatedAt).HasColumnName("created_at");
             e.Property(c => c.Status).HasColumnName("status");
 

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PickleballBookingSystem.Data;
@@ -11,9 +12,11 @@ using PickleballBookingSystem.Data;
 namespace PickleballBookingSystem.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261005142450_AddAvailableAmenities")]
+    partial class AddAvailableAmenities
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -188,10 +191,6 @@ namespace PickleballBookingSystem.Migrations
                     b.Property<string>("PaymentMethods")
                         .HasColumnType("jsonb")
                         .HasColumnName("payment_methods");
-
-                    b.Property<string>("AvailableAmenities")
-    .HasColumnType("jsonb")
-    .HasColumnName("available_amenities");
 
                     b.Property<string>("PrimaryColor")
                         .IsRequired()

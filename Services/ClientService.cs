@@ -28,9 +28,12 @@ public class ClientService : IClientService
             client.AccentColor,
             client.GcashNumber,
             client.GcashAccountName,
-            // ✅ Parse and return PaymentMethods
             !string.IsNullOrEmpty(client.PaymentMethods)
                 ? JsonSerializer.Deserialize<object>(client.PaymentMethods)
+                : null,
+            // ✅ NEW
+            !string.IsNullOrEmpty(client.AvailableAmenities)
+                ? JsonSerializer.Deserialize<object>(client.AvailableAmenities)
                 : null
         );
     }
@@ -53,10 +56,15 @@ public class ClientService : IClientService
         if (request.GcashNumber is not null) client.GcashNumber = request.GcashNumber;
         if (request.GcashAccountName is not null) client.GcashAccountName = request.GcashAccountName;
 
-        // ✅ Save payment methods as JSON string (EF will handle jsonb conversion)
         if (request.PaymentMethods is not null)
         {
             client.PaymentMethods = JsonSerializer.Serialize(request.PaymentMethods);
+        }
+
+        // ✅ NEW
+        if (request.AvailableAmenities is not null)
+        {
+            client.AvailableAmenities = JsonSerializer.Serialize(request.AvailableAmenities);
         }
 
         await _db.SaveChangesAsync();
@@ -70,9 +78,12 @@ public class ClientService : IClientService
             client.AccentColor,
             client.GcashNumber,
             client.GcashAccountName,
-            // ✅ Return updated PaymentMethods
             !string.IsNullOrEmpty(client.PaymentMethods)
                 ? JsonSerializer.Deserialize<object>(client.PaymentMethods)
+                : null,
+            // ✅ NEW
+            !string.IsNullOrEmpty(client.AvailableAmenities)
+                ? JsonSerializer.Deserialize<object>(client.AvailableAmenities)
                 : null
         );
     }

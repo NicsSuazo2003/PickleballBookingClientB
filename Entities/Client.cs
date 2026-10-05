@@ -1,4 +1,3 @@
-// Entities/Client.cs
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PickleballBookingSystem.Entities;
@@ -17,7 +16,10 @@ public class Client
     [Column(TypeName = "jsonb")]
     public string? PaymentMethods { get; set; }
 
-    // ✅ FIX: Ensure CreatedAt is always UTC
+    // ✅ NEW — venue-wide amenities (icon + name + description)
+    [Column(TypeName = "jsonb")]
+    public string? AvailableAmenities { get; set; }
+
     private DateTime _createdAt;
     public DateTime CreatedAt
     {

@@ -58,5 +58,6 @@ public record UpdateClientSettingsRequest(
     string? Name,
     string? GcashNumber,
     string? GcashAccountName,
-    object? PaymentMethods // ✅ Add this
+    object? PaymentMethods,
+    object? AvailableAmenities
 );

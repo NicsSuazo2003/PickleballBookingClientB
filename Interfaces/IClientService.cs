@@ -19,5 +19,6 @@ public record ClientDto(
     string AccentColor,
     string? GcashNumber,
     string? GcashAccountName,
-    object? PaymentMethods = null // ✅ ADD THIS
+    object? PaymentMethods = null, // ✅ ADD THIS
+     object? AvailableAmenities = null
 );
