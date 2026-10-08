@@ -92,7 +92,11 @@ public class CourtService : ICourtService
     // ✅ AVAILABILITY (COURT-SPECIFIC WITH CLIENT)
     // ========================================
 
-    public async Task<List<TimeSlotAvailabilityDto>> GetCourtAvailabilityAsync(Guid courtId, DateTime date, Guid clientId)
+    public async Task<List<TimeSlotAvailabilityDto>> GetCourtAvailabilityAsync(
+     Guid courtId,
+     DateTime date,
+     Guid clientId,
+     Guid? excludeBookingId = null)
     {
         date = DateTime.SpecifyKind(date.Date, DateTimeKind.Utc);
 
@@ -104,20 +108,37 @@ public class CourtService : ICourtService
         var closeHour = court.CloseTime.Hour;
         if (closeHour == 0) closeHour = 24;
 
-        // ✅ Slots taken by regular bookings on THIS court
-        var bookedTimes = await _db.TimeSlots
-            .Where(s => s.Date.Date == date.Date && s.Booking.CourtId == courtId)
-            .Join(_db.Bookings.Where(b =>
-                    b.Status != "cancelled"
-                    && b.Status != "expired"
-                    && b.Status != "rejected"
-                    && b.Status != "refunded"
-                    && b.ClientId == clientId),
-                s => s.BookingId, b => b.Id, (s, b) => s.StartTime)
+        // ✅ Slots taken by regular bookings on THIS court.
+        //    - Excludes the booking being rescheduled (if any) so its own
+        //      current slots show up as available in the reschedule modal.
+        //    - Pulls StartTime AND EndTime so we can expand each booking
+        //      across every hour it actually occupies, not just its start hour.
+        var bookedSlots = await _db.TimeSlots
+            .Where(s => s.Date.Date == date.Date
+                     && s.Booking.CourtId == courtId
+                     && s.Booking.ClientId == clientId
+                     && s.Booking.Id != (excludeBookingId ?? Guid.Empty)
+                     && s.Booking.Status != "cancelled"
+                     && s.Booking.Status != "expired"
+                     && s.Booking.Status != "rejected"
+                     && s.Booking.Status != "refunded")
+            .Select(s => new { s.StartTime, s.EndTime })
             .ToListAsync();
 
+        // ✅ Expand each booking slot into the set of hours it occupies.
+        //    A single TimeSlot row of 19:00–22:00 blocks hours 19, 20, 21.
+        var bookedSet = new HashSet<int>();
+        foreach (var bs in bookedSlots)
+        {
+            var startH = bs.StartTime.Hour;
+            var endH = bs.EndTime.Hour == 0 ? 24 : bs.EndTime.Hour;
+            for (int h = startH; h < endH; h++) bookedSet.Add(h);
+        }
+
         var blockedDates = await _db.BlockedDates
-            .Where(b => b.Date.Date == date.Date && (b.CourtId == null || b.CourtId == courtId) && b.ClientId == clientId)
+            .Where(b => b.Date.Date == date.Date
+                     && (b.CourtId == null || b.CourtId == courtId)
+                     && b.ClientId == clientId)
             .ToListAsync();
 
         var priceRules = await _db.PriceRules
@@ -125,7 +146,7 @@ public class CourtService : ICourtService
             .OrderByDescending(r => r.Priority)
             .ToListAsync();
 
-        // ✅ NEW — hours occupied by any active Open Play session using this court
+        // ✅ Hours occupied by any active Open Play session using this court
         var openPlayWindows = await _db.OpenPlaySessions
             .Where(s => s.IsActive
                      && s.ClientId == clientId
@@ -135,15 +156,17 @@ public class CourtService : ICourtService
             .ToListAsync();
 
         var dayOfWeek = date.DayOfWeek.ToString();
-        var isWeekend = date.DayOfWeek == DayOfWeek.Saturday || date.DayOfWeek == DayOfWeek.Sunday;
+        var isWeekend = date.DayOfWeek == DayOfWeek.Saturday
+                     || date.DayOfWeek == DayOfWeek.Sunday;
 
-        var bookedSet = bookedTimes.Select(t => $"{t.Hour:D2}:00").ToHashSet();
-
+        // ✅ Blocked dates — expand partial windows across their hour range too
         var blockedSet = new HashSet<int>();
         foreach (var bd in blockedDates)
         {
             if (bd.StartTime == null)
+            {
                 for (int h = openHour; h < closeHour; h++) blockedSet.Add(h);
+            }
             else
             {
                 var endH = bd.EndTime?.Hour ?? closeHour;
@@ -164,19 +187,22 @@ public class CourtService : ICourtService
             var endTime = $"{(h + 1) % 24:D2}:00";
 
             var isPast = isToday && (h < phTime.Hour || (h == phTime.Hour && 0 < phTime.Minute));
-            var isBooked = bookedSet.Contains(startTime);
+            var isBooked = bookedSet.Contains(h);            // ✅ int lookup, not string
             var isBlocked = blockedSet.Contains(h);
 
-            // ✅ NEW — blocked by an active Open Play session window
+            // ✅ Blocked by an active Open Play session window
             var isOpenPlayBlocked = openPlayWindows.Any(w =>
                 w.StartTime.Hour <= h && h < (w.EndTime.Hour == 0 ? 24 : w.EndTime.Hour));
 
+            // ✅ Peak pricing via price rules — first matching rule wins
             var slotPrice = court.PricePerHour;
             foreach (var rule in priceRules)
             {
-                var dayMatch = rule.DayOfWeek == "All" || rule.DayOfWeek == dayOfWeek ||
-                               (rule.DayOfWeek == "Weekend" && isWeekend) ||
-                               (rule.DayOfWeek == "Weekday" && !isWeekend);
+                var dayMatch = rule.DayOfWeek == "All"
+                            || rule.DayOfWeek == dayOfWeek
+                            || (rule.DayOfWeek == "Weekend" && isWeekend)
+                            || (rule.DayOfWeek == "Weekday" && !isWeekend);
+
                 if (dayMatch && slotTime >= rule.StartTime && slotTime < rule.EndTime)
                 {
                     slotPrice = rule.PricePerHour;
@@ -187,14 +213,14 @@ public class CourtService : ICourtService
             slots.Add(new TimeSlotAvailabilityDto(
                 $"slot-{courtId}-{date:yyyy-MM-dd}-{h}",
                 date.ToString("yyyy-MM-dd"),
-                startTime, endTime,
+                startTime,
+                endTime,
                 !isPast && !isBooked && !isBlocked && !isOpenPlayBlocked,
                 slotPrice));
         }
 
         return slots;
     }
-
     // ========================================
     // ✅ BLOCKED DATES (CLIENT-SPECIFIC)
     // ========================================

@@ -81,3 +81,25 @@ public record BookingSummaryDto(
     decimal TotalAmount,
     string CreatedAt
 );
+
+// ✅ NEW: reschedule request — any court, any date, any time
+public record RescheduleBookingRequest(
+    string? CourtId,                // null = keep current court
+    string? Date,                   // null = keep current date
+    List<StaffSlotRequest> Slots,   // required — the full new slot set
+    string? Reason,                 // optional, shown in audit + customer email
+    string? StaffNotes              // optional, internal only
+);
+
+// ✅ NEW: reschedule response wrapper — carries the delta info the UI needs
+public record RescheduleBookingResponse(
+    BookingDto Booking,
+    List<TimeSlotDto> PreviousSlots,
+    string PreviousDate,
+    string PreviousCourtId,
+    string PreviousCourtName,
+    decimal PreviousTotalAmount,
+    decimal NewTotalAmount,
+    decimal BalanceDue,             // positive = customer owes more
+    decimal RefundDue               // positive = customer is owed a refund
+);

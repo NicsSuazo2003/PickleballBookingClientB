@@ -24,4 +24,9 @@ public interface IBookingService
     Task<List<BookingSummaryDto>> TrackBookingSummariesByEmailAsync(string email, Guid clientId);
 
     Task<BookingDto> CreateStaffBookingAsync(StaffCreateBookingRequest request, Guid clientId);
+
+    Task<RescheduleBookingResponse> RescheduleBookingAsync(
+    Guid id,
+    RescheduleBookingRequest request,
+    Guid clientId);
 }

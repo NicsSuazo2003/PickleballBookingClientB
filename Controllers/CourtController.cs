@@ -54,10 +54,13 @@ public class CourtController : ControllerBase
     }
 
     [HttpGet("{id}/availability")]
-    public async Task<ActionResult<List<TimeSlotAvailabilityDto>>> GetAvailability(Guid id, [FromQuery] DateTime date)
+    public async Task<ActionResult<List<TimeSlotAvailabilityDto>>> GetAvailability(
+    Guid id,
+    [FromQuery] DateTime date,
+    [FromQuery] Guid? excludeBookingId = null)
     {
         var clientId = await GetClientId();
-        var slots = await _court.GetCourtAvailabilityAsync(id, date, clientId);
+        var slots = await _court.GetCourtAvailabilityAsync(id, date, clientId, excludeBookingId);
         return Ok(slots);
     }
 

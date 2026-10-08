@@ -547,4 +547,81 @@ public class EmailService
             _logger.LogInformation("Email sent → {To} ({Subject})", toEmail, subject);
         }
     }
+    // ═════════════════════════════════════════════════════════════
+    // 6. CUSTOMER — Booking Rescheduled
+    // ═════════════════════════════════════════════════════════════
+    public async Task NotifyCustomerBookingRescheduledAsync(
+        string customerEmail,
+        string customerName,
+        string referenceCode,
+        string oldDate,
+        string oldTime,
+        string oldCourtName,
+        string newDate,
+        string newTime,
+        string newCourtName,
+        string? amount = null,
+        string? reason = null)
+    {
+        try
+        {
+            var apiKey = _config["Brevo:ApiKey"];
+            var senderEmail = _config["Brevo:SenderEmail"];
+            var senderName = _config["Brevo:SenderName"];
+            var frontendUrl = _config["App:FrontendUrl"];
+
+            var prettyOldDate = FormatDate(oldDate);
+            var prettyOldTime = FormatTimeRange(oldTime);
+            var prettyNewDate = FormatDate(newDate);
+            var prettyNewTime = FormatTimeRange(newTime);
+
+            var amountRow = string.IsNullOrWhiteSpace(amount)
+                ? ""
+                : KvRow("New Total", amount, isLast: string.IsNullOrWhiteSpace(reason));
+
+            var reasonBlock = string.IsNullOrWhiteSpace(reason)
+                ? ""
+                : $@"
+              <div style='margin-top:20px;padding:14px 16px;border-left:3px solid {ACCENT_TEAL};background-color:{ACCENT_TEAL}15;border-radius:6px;'>
+                <div style='font-size:10px;font-weight:800;letter-spacing:1.8px;color:{TEXT_CREAM_MUTED};text-transform:uppercase;margin-bottom:5px;'>Note from the team</div>
+                <div style='font-size:14px;color:{TEXT_CREAM};line-height:1.55;'>{reason}</div>
+              </div>";
+
+            var content = $@"
+          <p style='margin:0 0 8px;font-size:15px;color:{TEXT_CREAM_SOFT};'>
+            Hi {customerName},
+          </p>
+          <p style='margin:0 0 24px;font-size:15px;line-height:1.65;color:{TEXT_CREAM_SOFT};'>
+            Your booking has been <strong style='color:{ACCENT};font-weight:700;'>moved</strong>. Here are the updated details — please double-check the new schedule below.
+          </p>
+
+          {StatusChip("Rescheduled", ACCENT)}
+
+          <table role='presentation' width='100%' cellpadding='0' cellspacing='0' border='0'>
+            {KvRow("Reference", referenceCode)}
+            {KvRow("Previous Schedule", $"{prettyOldDate} · {prettyOldTime}")}
+            {KvRow("Previous Court", oldCourtName)}
+            {KvRow("New Schedule", $"{prettyNewDate} · {prettyNewTime}")}
+            {KvRow("New Court", newCourtName)}
+            {amountRow}
+          </table>
+
+          {reasonBlock}
+
+          <p style='margin:24px 0 0;font-size:14px;line-height:1.65;color:{TEXT_CREAM_MUTED};'>
+            If the new schedule doesn't work for you, reply to this email or reach out and we'll sort it out.
+          </p>
+
+          {CtaButton($"{frontendUrl}/track", "Track Your Booking")}
+        ";
+
+            var html = WrapLayout("Booking Rescheduled", content);
+            await SendAsync(apiKey, senderEmail, senderName, customerEmail, customerName,
+                $"🔄 Booking Rescheduled: {referenceCode}", html);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Reschedule email notification failed");
+        }
+    }
 }

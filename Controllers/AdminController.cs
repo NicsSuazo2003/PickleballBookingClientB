@@ -210,4 +210,15 @@ public class AdminController : ControllerBase
         await _admin.DeleteStaffAsync(id, clientId);
         return Ok(new { message = "Staff removed" });
     }
+
+    [HttpPatch("bookings/{id}/reschedule")]
+    [Authorize(Roles = "admin,staff")]
+    public async Task<ActionResult<RescheduleBookingResponse>> RescheduleBooking(
+    Guid id,
+    RescheduleBookingRequest request)
+    {
+        var clientId = await GetClientId();
+        var result = await _booking.RescheduleBookingAsync(id, request, clientId);
+        return Ok(result);
+    }
 }
