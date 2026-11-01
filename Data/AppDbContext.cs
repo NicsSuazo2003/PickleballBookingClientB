@@ -1,3 +1,4 @@
+// Data/AppDbContext.cs
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PickleballBookingSystem.Entities;
@@ -17,35 +18,34 @@ public class AppDbContext : DbContext
     public DbSet<PriceRule> PriceRules => Set<PriceRule>();
     public DbSet<Client> Clients => Set<Client>();
     public DbSet<OpenPlaySession> OpenPlaySessions => Set<OpenPlaySession>();
-    public DbSet<OpenPlaySessionCourt> OpenPlaySessionCourts => Set<OpenPlaySessionCourt>();  // ✅ NEW
+    public DbSet<OpenPlaySessionCourt> OpenPlaySessionCourts => Set<OpenPlaySessionCourt>();
+    public DbSet<SecurityEvent> SecurityEvents => Set<SecurityEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // ✅ Configure DateTime to use UTC
+        // ✅ Configure DateTime to use UTC — MUST be the fixed version below.
         ConfigureDateTimeUtc(modelBuilder);
 
-        // ✅ Table names are genuinely all-lowercase in Supabase — keep this.
+        // ✅ Lowercase table names (Supabase)
         foreach (var entity in modelBuilder.Model.GetEntityTypes())
         {
             entity.SetTableName(entity.GetTableName()!.ToLower());
         }
 
-        // ✅ User configuration (FIXED)
+        // ✅ User configuration
         modelBuilder.Entity<User>(e =>
         {
             e.HasIndex(u => u.Email).IsUnique();
 
-            // ✅ Map ClientId to client_id column
             e.Property(u => u.ClientId).HasColumnName("client_id");
 
-            // ✅ Relationship with Client
             e.HasOne(u => u.Client)
                 .WithMany()
                 .HasForeignKey(u => u.ClientId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
-        // ✅ Client entity — snake_case columns
+        // ✅ Client entity
         modelBuilder.Entity<Client>(e =>
         {
             e.Property(c => c.Id).HasColumnName("id");
@@ -59,13 +59,16 @@ public class AppDbContext : DbContext
             e.Property(c => c.PaymentMethods)
                 .HasColumnName("payment_methods")
                 .HasColumnType("jsonb");
-
             e.Property(c => c.AvailableAmenities)
-    .HasColumnName("available_amenities")
-    .HasColumnType("jsonb");
-
+                .HasColumnName("available_amenities")
+                .HasColumnType("jsonb");
             e.Property(c => c.CreatedAt).HasColumnName("created_at");
             e.Property(c => c.Status).HasColumnName("status");
+
+            // ✅ NEW — Batch A booking window
+            e.Property(c => c.BookingWindowMode).HasColumnName("booking_window_mode");
+            e.Property(c => c.BookingOpenDate).HasColumnName("booking_open_date");
+            e.Property(c => c.BookingCloseDate).HasColumnName("booking_close_date");
 
             e.HasMany(c => c.Courts)
                 .WithOne(crt => crt.Client)
@@ -78,7 +81,7 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // ✅ Court - Booking relationship
+        // ✅ Court relationships
         modelBuilder.Entity<Court>(e =>
         {
             e.HasMany(c => c.Bookings)
@@ -93,7 +96,6 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // ✅ Court - TimeSlot relationship
         modelBuilder.Entity<Court>(e =>
         {
             e.HasMany(c => c.TimeSlots)
@@ -102,7 +104,6 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
-        // ✅ Court - BlockedDate relationship
         modelBuilder.Entity<Court>(e =>
         {
             e.HasMany(c => c.BlockedDates)
@@ -111,7 +112,7 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
-        // ✅ Booking - TimeSlot relationship
+        // ✅ Booking configuration
         modelBuilder.Entity<Booking>(e =>
         {
             e.HasMany(b => b.Slots)
@@ -130,19 +131,31 @@ public class AppDbContext : DbContext
                 .HasForeignKey(b => b.ClientId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // ✅ Open Play link
             e.Property(b => b.OpenPlaySessionId).HasColumnName("OpenPlaySessionId");
             e.HasOne(b => b.OpenPlaySession)
                 .WithMany(s => s.Bookings)
                 .HasForeignKey(b => b.OpenPlaySessionId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            // ✅ Configure Date to be stored as UTC
             e.Property(b => b.Date)
                 .HasConversion(new DateTimeToUtcConverter());
+
+            // ✅ NEW — unique ReferenceCode (deferred: TimeSlot unique index)
+            e.HasIndex(b => b.ReferenceCode).IsUnique();
         });
 
         // ✅ TimeSlot configuration
+        //   ⚠️ DEFERRED: the (CourtId, Date, StartTime) unique index is NOT
+        //   added here. The prod DB currently has 44 duplicate groups from a
+        //   pre-existing concurrency bug in BookingService.CreateBookingAsync
+        //   (which Phase 3 fixes). Adding the index now would fail on existing
+        //   data and, if forced, would require cancelling real bookings.
+        //
+        //   TODO Batch A.2: after Phase 3 ships AND duplicates are cleaned,
+        //   add:
+        //     e.HasIndex(ts => new { ts.CourtId, ts.Date, ts.StartTime })
+        //         .IsUnique()
+        //         .HasFilter("\"CourtId\" IS NOT NULL");
         modelBuilder.Entity<TimeSlot>(e =>
         {
             e.HasOne(ts => ts.Booking)
@@ -155,7 +168,6 @@ public class AppDbContext : DbContext
                 .HasForeignKey(ts => ts.CourtId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            // ✅ Configure Date to be stored as UTC
             e.Property(ts => ts.Date)
                 .HasConversion(new DateTimeToUtcConverter());
         });
@@ -174,7 +186,6 @@ public class AppDbContext : DbContext
                 .HasForeignKey(bd => bd.ClientId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // ✅ Configure Date to be stored as UTC
             e.Property(bd => bd.Date)
                 .HasConversion(new DateTimeToUtcConverter());
         });
@@ -189,7 +200,7 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // Notification configuration
+        // ✅ Notification configuration
         modelBuilder.Entity<Notification>(e =>
         {
             e.HasOne(n => n.User)
@@ -228,18 +239,16 @@ public class AppDbContext : DbContext
                 .HasForeignKey(s => s.CourtId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // ✅ NEW — many courts per session
             e.HasMany(s => s.SessionCourts)
                 .WithOne(sc => sc.OpenPlaySession)
                 .HasForeignKey(sc => sc.OpenPlaySessionId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // ✅ Configure Date to be stored as UTC
             e.Property(s => s.Date)
                 .HasConversion(new DateTimeToUtcConverter());
         });
 
-        // ✅ NEW — OpenPlaySessionCourt join configuration
+        // ✅ OpenPlaySessionCourt join
         modelBuilder.Entity<OpenPlaySessionCourt>(e =>
         {
             e.Property(sc => sc.OpenPlaySessionId).HasColumnName("OpenPlaySessionId");
@@ -253,16 +262,51 @@ public class AppDbContext : DbContext
                 .HasForeignKey(sc => sc.CourtId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+
+        // ✅ NEW — SecurityEvent configuration
+        modelBuilder.Entity<SecurityEvent>(e =>
+        {
+            e.Property(se => se.ClientId).HasColumnName("ClientId");
+            e.Property(se => se.IpHash).HasColumnName("IpHash").HasMaxLength(64);
+            e.Property(se => se.IpAddress)
+    .HasColumnName("IpAddress")
+    .HasMaxLength(45);   // ✅ text — fits IPv6 with IPv4-mapped form
+            e.Property(se => se.UserAgent).HasColumnName("UserAgent").HasMaxLength(512);
+            e.Property(se => se.EventType)
+                .HasColumnName("EventType")
+                .HasMaxLength(64)
+                .IsRequired();
+            e.Property(se => se.Severity)
+                .HasColumnName("Severity")
+                .HasMaxLength(16)
+                .IsRequired();
+            e.Property(se => se.Message).HasColumnName("Message").HasMaxLength(1024);
+            e.Property(se => se.Metadata)
+                .HasColumnName("Metadata")
+                .HasColumnType("jsonb");
+            e.Property(se => se.Success).HasColumnName("Success");
+            e.Property(se => se.ErrorCode).HasColumnName("ErrorCode").HasMaxLength(32);
+            e.Property(se => se.CreatedAt).HasColumnName("CreatedAt");
+
+            // ✅ Two indexes: per-tenant timeline + per-event-type timeline
+            e.HasIndex(se => new { se.ClientId, se.CreatedAt })
+                .HasDatabaseName("IX_security_events_ClientId_CreatedAt");
+            e.HasIndex(se => new { se.EventType, se.CreatedAt })
+                .HasDatabaseName("IX_security_events_EventType_CreatedAt");
+        });
     }
 
-    // ✅ Helper method to configure all DateTime properties to use UTC
+    // ✅ Helper — applies NOW() default ONLY to non-nullable DateTime.
+    //   Nullable DateTime? must NOT get a default, or "no lockout" /
+    //   "no reset expiry" / "no booking window" become "locked / expiring /
+    //   windowed NOW()" — the exact bug that broke SmashPoint.
     private void ConfigureDateTimeUtc(ModelBuilder modelBuilder)
     {
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
             foreach (var property in entityType.GetProperties())
             {
-                if (property.ClrType == typeof(DateTime) || property.ClrType == typeof(DateTime?))
+                if (property.ClrType == typeof(DateTime))
                 {
                     property.SetDefaultValueSql("NOW() AT TIME ZONE 'UTC'");
                 }
@@ -271,7 +315,7 @@ public class AppDbContext : DbContext
     }
 }
 
-// ✅ Custom converter to ensure DateTime is always UTC
+// ✅ Custom converter — keeps DateTime kind consistent across reads/writes
 public class DateTimeToUtcConverter : ValueConverter<DateTime, DateTime>
 {
     public DateTimeToUtcConverter()

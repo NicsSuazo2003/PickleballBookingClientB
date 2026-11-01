@@ -105,9 +105,7 @@ namespace PickleballBookingSystem.Migrations
                         .HasColumnName("OpenPlaySessionId");
 
                     b.Property<DateTime?>("PaymentExpiresAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("NOW() AT TIME ZONE 'UTC'");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("PaymentMethod")
                         .IsRequired()
@@ -141,6 +139,9 @@ namespace PickleballBookingSystem.Migrations
 
                     b.HasIndex("OpenPlaySessionId");
 
+                    b.HasIndex("ReferenceCode")
+                        .IsUnique();
+
                     b.HasIndex("UserId");
 
                     b.ToTable("bookings");
@@ -161,6 +162,19 @@ namespace PickleballBookingSystem.Migrations
                     b.Property<string>("AvailableAmenities")
                         .HasColumnType("jsonb")
                         .HasColumnName("available_amenities");
+
+                    b.Property<DateTime?>("BookingCloseDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("booking_close_date");
+
+                    b.Property<DateTime?>("BookingOpenDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("booking_open_date");
+
+                    b.Property<string>("BookingWindowMode")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("booking_window_mode");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -188,10 +202,6 @@ namespace PickleballBookingSystem.Migrations
                     b.Property<string>("PaymentMethods")
                         .HasColumnType("jsonb")
                         .HasColumnName("payment_methods");
-
-                    b.Property<string>("AvailableAmenities")
-    .HasColumnType("jsonb")
-    .HasColumnName("available_amenities");
 
                     b.Property<string>("PrimaryColor")
                         .IsRequired()
@@ -465,6 +475,78 @@ namespace PickleballBookingSystem.Migrations
                     b.ToTable("pricerules");
                 });
 
+            modelBuilder.Entity("PickleballBookingSystem.Entities.SecurityEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ClientId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ClientId");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreatedAt")
+                        .HasDefaultValueSql("NOW() AT TIME ZONE 'UTC'");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("ErrorCode");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("EventType");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(45)
+                        .HasColumnType("character varying(45)")
+                        .HasColumnName("IpAddress");
+
+                    b.Property<string>("IpHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("IpHash");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("Message");
+
+                    b.Property<string>("Metadata")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("Metadata");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("Severity");
+
+                    b.Property<bool>("Success")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Success");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("UserAgent");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId", "CreatedAt")
+                        .HasDatabaseName("IX_security_events_ClientId_CreatedAt");
+
+                    b.HasIndex("EventType", "CreatedAt")
+                        .HasDatabaseName("IX_security_events_EventType_CreatedAt");
+
+                    b.ToTable("securityevents");
+                });
+
             modelBuilder.Entity("PickleballBookingSystem.Entities.TimeSlot", b =>
                 {
                     b.Property<Guid>("Id")
@@ -525,12 +607,24 @@ namespace PickleballBookingSystem.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("FailedLoginCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("LockoutUntil")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("PasswordResetExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PasswordResetTokenHash")
                         .HasColumnType("text");
 
                     b.Property<string>("Phone")
