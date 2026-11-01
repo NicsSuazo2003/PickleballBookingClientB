@@ -13,11 +13,16 @@ public class SecurityLogger : ISecurityLogger
 {
     private readonly AppDbContext _db;
     private readonly ILogger<SecurityLogger> _logger;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public SecurityLogger(AppDbContext db, ILogger<SecurityLogger> logger)
+    public SecurityLogger(
+        AppDbContext db,
+        ILogger<SecurityLogger> logger,
+        IHttpContextAccessor httpContextAccessor)
     {
         _db = db;
         _logger = logger;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task LogAsync(SecurityEvent evt)
@@ -27,11 +32,13 @@ public class SecurityLogger : ISecurityLogger
             if (evt.Id == Guid.Empty) evt.Id = Guid.NewGuid();
             if (evt.CreatedAt == default) evt.CreatedAt = DateTime.UtcNow;
 
+            // ✅ Auto-enrich IP + User-Agent from the current request if the
+            // caller didn't set them. This closes the gap where booking.created,
+            // auth.password_changed, admin.staff_* and similar events had no IP.
+            EnrichFromHttpContext(evt);
+
             if (evt.Metadata is not null && evt.Metadata.Length > 8000)
-            {
-                // Truncate oversized metadata rather than fail the insert
                 evt.Metadata = evt.Metadata.Substring(0, 8000);
-            }
 
             _db.SecurityEvents.Add(evt);
             await _db.SaveChangesAsync();
@@ -78,6 +85,29 @@ public class SecurityLogger : ISecurityLogger
         var bytes = Encoding.UTF8.GetBytes(ip.Trim());
         var hash = SHA256.HashData(bytes);
         return Convert.ToHexString(hash).ToLowerInvariant();   // 64 chars
+    }
+
+    // ✅ Enrich any event that didn't set IP / User-Agent explicitly.
+    private void EnrichFromHttpContext(SecurityEvent evt)
+    {
+        var ctx = _httpContextAccessor.HttpContext;
+        if (ctx is null) return;
+
+        if (string.IsNullOrEmpty(evt.IpAddress) && string.IsNullOrEmpty(evt.IpHash))
+        {
+            var ip = ctx.Connection.RemoteIpAddress?.ToString();
+            if (!string.IsNullOrEmpty(ip))
+            {
+                evt.IpAddress = ip;
+                evt.IpHash = HashIp(ip);
+            }
+        }
+
+        if (string.IsNullOrEmpty(evt.UserAgent))
+        {
+            var ua = ctx.Request.Headers["User-Agent"].FirstOrDefault();
+            evt.UserAgent = Truncate(ua, 512);
+        }
     }
 
     private static string? Truncate(string? s, int max)

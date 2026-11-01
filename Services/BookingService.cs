@@ -14,6 +14,28 @@ public class BookingService : IBookingService
     private readonly EmailService _email;
     private readonly ISecurityLogger _security;
 
+    // ✅ SUSPICIOUS — patterns for rejecting obvious test bookings
+    private static readonly HashSet<string> SuspiciousNamePatterns = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "test", "testing", "sample", "johndoe", "john doe", "asdf", "qwerty", "dummy", "fake"
+    };
+
+    private static readonly HashSet<string> SuspiciousEmailLocalParts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "test", "testing", "sample", "johndoe", "asdf", "qwerty", "dummy", "fake"
+    };
+
+    private static readonly string[] DisposableEmailDomains = new[]
+    {
+        "@mailinator.com", "@tempmail.com", "@guerrillamail.com",
+        "@10minutemail.com", "@throwaway.email"
+    };
+
+    private static readonly string[] SuspiciousNotesKeywords = new[]
+    {
+        "trap", "test", "fake", "hack", "sql", "injection"
+    };
+
     public BookingService(AppDbContext db, EmailService email, ISecurityLogger security)
     {
         _db = db;
@@ -77,9 +99,54 @@ public class BookingService : IBookingService
         if (isBlocked)
             throw new InvalidOperationException("This time slot is blocked");
 
-        // ✅ NEW — one-pending-per-email guard (scope A)
-        // Blocks a second `pending_payment` booking for the same
-        // (clientId, courtId, date, email) while the first is still active.
+        // ✅ SUSPICIOUS — reject obviously-fake test bookings at creation
+        if (LooksLikeTest(request.CustomerName, request.CustomerEmail))
+        {
+            await _security.LogAsync(new SecurityEvent
+            {
+                ClientId = clientId,
+                EventType = "booking.suspicious_rejected",
+                Severity = "warning",
+                Message = $"Rejected suspicious booking: name='{request.CustomerName}', email='{request.CustomerEmail}'",
+                Metadata = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    name = request.CustomerName,
+                    email = request.CustomerEmail,
+                    phone = request.CustomerPhone,
+                    courtId = courtGuid,
+                    date = bookingDate.ToString("yyyy-MM-dd"),
+                    totalAmount = request.TotalAmount,
+                    notes = request.Notes,
+                }),
+                Success = false,
+                ErrorCode = "SUSPICIOUS_CUSTOMER",
+            });
+
+            throw new InvalidOperationException(
+                "This booking looks like a test. Please use your real name and email. " +
+                "If this is a mistake, contact us and we'll help.");
+        }
+
+        // ✅ SUSPICIOUS — soft signal: log notes with test/trap/fake keywords, but don't reject
+        if (NotesMentionSuspiciousKeywords(request.Notes))
+        {
+            await _security.LogAsync(new SecurityEvent
+            {
+                ClientId = clientId,
+                EventType = "booking.suspicious_notes",
+                Severity = "warning",
+                Message = "Booking notes contain suspicious keywords",
+                Metadata = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    notes = request.Notes,
+                    email = request.CustomerEmail,
+                    name = request.CustomerName,
+                }),
+                Success = true,
+            });
+        }
+
+        // ✅ one-pending-per-email guard (scope A)
         var normalizedEmail = request.CustomerEmail.Trim().ToLowerInvariant();
         var existingPending = await _db.Bookings
             .AnyAsync(b => b.ClientId == clientId
@@ -124,15 +191,13 @@ public class BookingService : IBookingService
 
         _db.Bookings.Add(booking);
 
-        // ✅ NEW — serialization retry on ReferenceCode collision
+        // ✅ serialization retry on ReferenceCode collision
         try
         {
             await _db.SaveChangesAsync();
         }
         catch (DbUpdateException ex) when (IsReferenceCodeCollision(ex))
         {
-            // Regenerate and retry once. This should be vanishingly rare —
-            // the reference space is ~9000/day per (client, court, date).
             _db.Entry(booking).State = EntityState.Detached;
 
             booking.ReferenceCode = $"BK-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}";
@@ -150,7 +215,7 @@ public class BookingService : IBookingService
             }
         }
 
-        // ✅ NEW — audit
+        // ✅ audit
         await _security.LogAsync(new SecurityEvent
         {
             ClientId = clientId,
@@ -180,6 +245,41 @@ public class BookingService : IBookingService
         catch { }
 
         return MapToDto(booking, court.Name);
+    }
+
+    // ✅ SUSPICIOUS — helper: does this name + email look like an obvious test?
+    private static bool LooksLikeTest(string? name, string? email)
+    {
+        var n = (name ?? string.Empty).Trim().ToLowerInvariant();
+        var e = (email ?? string.Empty).Trim().ToLowerInvariant();
+
+        if (string.IsNullOrEmpty(n) && string.IsNullOrEmpty(e)) return false;
+
+        // Name: exact match, or any single token matches a suspicious pattern
+        if (!string.IsNullOrEmpty(n))
+        {
+            if (SuspiciousNamePatterns.Contains(n)) return true;
+            var nameTokens = n.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (nameTokens.Any(t => SuspiciousNamePatterns.Contains(t))) return true;
+        }
+
+        // Email: local-part exact match, or disposable domain
+        if (!string.IsNullOrEmpty(e))
+        {
+            var local = e.Split('@')[0];
+            if (SuspiciousEmailLocalParts.Contains(local)) return true;
+            if (DisposableEmailDomains.Any(d => e.EndsWith(d, StringComparison.OrdinalIgnoreCase))) return true;
+        }
+
+        return false;
+    }
+
+    // ✅ SUSPICIOUS — helper: do the notes contain keywords we want to log?
+    private static bool NotesMentionSuspiciousKeywords(string? notes)
+    {
+        if (string.IsNullOrWhiteSpace(notes)) return false;
+        var n = notes.ToLowerInvariant();
+        return SuspiciousNotesKeywords.Any(k => n.Contains(k));
     }
 
     private static bool IsReferenceCodeCollision(DbUpdateException ex)
@@ -298,6 +398,31 @@ public class BookingService : IBookingService
 
         if (booking.Status != "pending_payment")
             throw new InvalidOperationException("Booking is not pending payment");
+
+        // ✅ SUSPICIOUS — reject payment upload on bookings whose identity looks fake
+        if (LooksLikeTest(booking.CustomerName, booking.CustomerEmail))
+        {
+            await _security.LogAsync(new SecurityEvent
+            {
+                ClientId = clientId,
+                EventType = "booking.suspicious_payment_upload",
+                Severity = "critical",
+                Message = $"Blocked payment upload on suspicious booking {booking.ReferenceCode}",
+                Metadata = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    referenceCode = booking.ReferenceCode,
+                    email = booking.CustomerEmail,
+                    name = booking.CustomerName,
+                    paymentReference = paymentReference,
+                    paymentMethod = paymentMethod,
+                }),
+                Success = false,
+                ErrorCode = "SUSPICIOUS_BOOKING",
+            });
+
+            throw new InvalidOperationException(
+                "This booking can't submit a payment. Contact us if this is a mistake.");
+        }
 
         if (!string.IsNullOrEmpty(screenshotUrl))
             booking.PaymentScreenshot = screenshotUrl;
@@ -680,7 +805,7 @@ public class BookingService : IBookingService
             }
         }
 
-        // ✅ NEW — audit
+        // ✅ audit
         await _security.LogAsync(new SecurityEvent
         {
             ClientId = clientId,
@@ -736,20 +861,20 @@ public class BookingService : IBookingService
 
         return bookings.Select(b =>
         {
-            var firstSlot = b.Slots.OrderBy(s => s.StartTime).FirstOrDefault();
-            var lastSlot = b.Slots.OrderByDescending(s => s.EndTime).FirstOrDefault();
+        var firstSlot = b.Slots.OrderBy(s => s.StartTime).FirstOrDefault();
+        var lastSlot = b.Slots.OrderByDescending(s => s.EndTime).FirstOrDefault();
 
-            return new BookingSummaryDto(
-                b.Id.ToString(),
-                b.ReferenceCode,
-                b.Court?.Name ?? "",
-                b.Date.ToString("yyyy-MM-dd"),
-                firstSlot?.StartTime.ToString("HH:mm") ?? "",
-                lastSlot?.EndTime.ToString("HH:mm") ?? "",
-                b.Status,
-                b.TotalAmount,
-                b.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ssZ")
-            );
+        return new BookingSummaryDto(
+            b.Id.ToString(),
+            b.ReferenceCode,
+            b.Court?.Name ?? "",
+            b.Date.ToString("yyyy-MM-dd"),
+            firstSlot?.StartTime.ToString("HH:mm") ?? "",
+            lastSlot?.EndTime.ToString("HH:mm") ?? "",
+            b.Status,
+            b.TotalAmount,
+            b.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ssZ")
+                       );
         }).ToList();
     }
 }
