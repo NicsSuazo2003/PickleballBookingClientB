@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿// Controllers/CourtController.cs
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PickleballBookingSystem.DTOs;
 using PickleballBookingSystem.Interfaces;
@@ -12,69 +13,54 @@ public class CourtController : ControllerBase
 {
     private readonly ICourtService _court;
     private readonly ClientResolver _clientResolver;
-    private readonly IClientService _clientService;
 
-    public CourtController(
-        ICourtService court,
-        ClientResolver clientResolver,
-        IClientService clientService)
+    public CourtController(ICourtService court, ClientResolver clientResolver)
     {
         _court = court;
         _clientResolver = clientResolver;
-        _clientService = clientService;
     }
 
-    private async Task<Guid> GetClientId()
-    {
-        var subdomain = _clientResolver.GetSubdomain();
-        if (string.IsNullOrEmpty(subdomain))
-            throw new UnauthorizedAccessException("Client identification required");
+    // ✅ Fix: 409 (not 401) on missing tenant, via ResolveClientIdAsync
+    private Task<Guid> GetClientId() => _clientResolver.ResolveClientIdAsync();
 
-        return await _clientService.GetClientIdBySubdomainAsync(subdomain);
-    }
-
-    // ========================================
-    // ✅ PUBLIC ENDPOINTS
-    // ========================================
+    // ═════════════════════════════════════════════════════════════
+    // PUBLIC
+    // ═════════════════════════════════════════════════════════════
 
     [HttpGet]
     public async Task<ActionResult<List<CourtDto>>> GetAllCourts()
     {
         var clientId = await GetClientId();
-        var courts = await _court.GetAllCourtsAsync(clientId);
-        return Ok(courts);
+        return Ok(await _court.GetAllCourtsAsync(clientId));
     }
 
     [HttpGet("{id}")]
     public async Task<ActionResult<CourtDto>> GetCourt(Guid id)
     {
         var clientId = await GetClientId();
-        var court = await _court.GetCourtByIdAsync(id, clientId);
-        return Ok(court);
+        return Ok(await _court.GetCourtByIdAsync(id, clientId));
     }
 
     [HttpGet("{id}/availability")]
     public async Task<ActionResult<List<TimeSlotAvailabilityDto>>> GetAvailability(
-    Guid id,
-    [FromQuery] DateTime date,
-    [FromQuery] Guid? excludeBookingId = null)
+        Guid id,
+        [FromQuery] DateTime date,
+        [FromQuery] Guid? excludeBookingId = null)
     {
         var clientId = await GetClientId();
-        var slots = await _court.GetCourtAvailabilityAsync(id, date, clientId, excludeBookingId);
-        return Ok(slots);
+        return Ok(await _court.GetCourtAvailabilityAsync(id, date, clientId, excludeBookingId));
     }
 
     [HttpGet("{id}/blocked-dates")]
     public async Task<ActionResult<List<BlockedDateDto>>> GetBlockedDates(Guid id)
     {
         var clientId = await GetClientId();
-        var blockedDates = await _court.GetBlockedDatesAsync(id, clientId);
-        return Ok(blockedDates);
+        return Ok(await _court.GetBlockedDatesAsync(id, clientId));
     }
 
-    // ========================================
-    // ✅ ADMIN ENDPOINTS
-    // ========================================
+    // ═════════════════════════════════════════════════════════════
+    // ADMIN
+    // ═════════════════════════════════════════════════════════════
 
     [Authorize(Roles = "admin")]
     [HttpPost]
@@ -90,8 +76,7 @@ public class CourtController : ControllerBase
     public async Task<ActionResult<CourtDto>> UpdateCourt(Guid id, UpdateCourtRequest request)
     {
         var clientId = await GetClientId();
-        var court = await _court.UpdateCourtAsync(id, request, clientId);
-        return Ok(court);
+        return Ok(await _court.UpdateCourtAsync(id, request, clientId));
     }
 
     [Authorize(Roles = "admin")]
@@ -121,30 +106,27 @@ public class CourtController : ControllerBase
         return NoContent();
     }
 
-    // ========================================
-    // ⚠️ DEPRECATED - Single Court Endpoints (Backward Compatibility)
-    // ========================================
+    // ═════════════════════════════════════════════════════════════
+    // LEGACY (single-court backwards compat)
+    // ═════════════════════════════════════════════════════════════
 
     [HttpGet("legacy")]
     public async Task<ActionResult<CourtDto>> GetCourtLegacy()
     {
-        var court = await _court.GetCourtAsync();
-        return Ok(court);
+        return Ok(await _court.GetCourtAsync());
     }
 
     [HttpGet("legacy/availability")]
     public async Task<ActionResult<List<TimeSlotAvailabilityDto>>> GetAvailabilityLegacy([FromQuery] DateTime date)
     {
-        var slots = await _court.GetAvailabilityAsync(date);
-        return Ok(slots);
+        return Ok(await _court.GetAvailabilityAsync(date));
     }
 
     [Authorize(Roles = "admin")]
     [HttpPut("legacy/settings")]
     public async Task<ActionResult<CourtDto>> UpdateSettingsLegacy(UpdateCourtRequest request)
     {
-        var court = await _court.UpdateCourtSettingsAsync(request);
-        return Ok(court);
+        return Ok(await _court.UpdateCourtSettingsAsync(request));
     }
 
     [Authorize(Roles = "admin")]
@@ -164,16 +146,15 @@ public class CourtController : ControllerBase
         return CreatedAtAction(nameof(GetBlockedDatesLegacy), result);
     }
 
-    // ========================================
-    // ✅ PRICE RULES ENDPOINTS
-    // ========================================
+    // ═════════════════════════════════════════════════════════════
+    // PRICE RULES
+    // ═════════════════════════════════════════════════════════════
 
     [HttpGet("price-rules")]
     public async Task<ActionResult<List<PriceRuleDto>>> GetPriceRules()
     {
         var clientId = await GetClientId();
-        var rules = await _court.GetPriceRulesAsync(clientId);
-        return Ok(rules);
+        return Ok(await _court.GetPriceRulesAsync(clientId));
     }
 
     [Authorize(Roles = "admin")]
@@ -190,8 +171,7 @@ public class CourtController : ControllerBase
     public async Task<ActionResult<PriceRuleDto>> UpdatePriceRule(Guid id, UpdatePriceRuleRequest request)
     {
         var clientId = await GetClientId();
-        var rule = await _court.UpdatePriceRuleAsync(id, request, clientId);
-        return Ok(rule);
+        return Ok(await _court.UpdatePriceRuleAsync(id, request, clientId));
     }
 
     [Authorize(Roles = "admin")]

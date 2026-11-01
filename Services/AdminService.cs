@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿// Services/AdminService.cs
+using Microsoft.EntityFrameworkCore;
 using PickleballBookingSystem.Data;
 using PickleballBookingSystem.DTOs;
 using PickleballBookingSystem.Entities;
@@ -10,12 +11,13 @@ namespace PickleballBookingSystem.Services;
 public class AdminService : IAdminService
 {
     private readonly AppDbContext _db;
+    private readonly ISecurityLogger _security;
 
-    public AdminService(AppDbContext db) => _db = db;
-
-    // ========================================
-    // ANALYTICS
-    // ========================================
+    public AdminService(AppDbContext db, ISecurityLogger security)
+    {
+        _db = db;
+        _security = security;
+    }
 
     public async Task<AnalyticsDto> GetAnalyticsAsync(Guid clientId)
     {
@@ -51,28 +53,15 @@ public class AdminService : IAdminService
             .OrderBy(b => b.Date).TakeLast(30).ToList();
 
         return new AnalyticsDto(
-            totalRevenue,
-            totalBookings,
-            activeUsers,
-            confirmedBookings,
-            pendingPayments,
-            completedBookings,
-            cancelledBookings,
-            statusBreakdown,
-            revenueByDay,
-            bookingsByDay,
-            12.5,
-            8.3,
-            5.1
-        );
+            totalRevenue, totalBookings, activeUsers,
+            confirmedBookings, pendingPayments, completedBookings, cancelledBookings,
+            statusBreakdown, revenueByDay, bookingsByDay,
+            12.5, 8.3, 5.1);
     }
 
     public async Task<List<CourtAnalyticsDto>> GetCourtAnalyticsAsync(Guid clientId)
     {
-        var courts = await _db.Courts
-            .Where(c => c.ClientId == clientId)
-            .ToListAsync();
-
+        var courts = await _db.Courts.Where(c => c.ClientId == clientId).ToListAsync();
         var result = new List<CourtAnalyticsDto>();
 
         foreach (var court in courts)
@@ -95,22 +84,12 @@ public class AdminService : IAdminService
                 : 0;
 
             result.Add(new CourtAnalyticsDto(
-                court.Id.ToString(),
-                court.Name,
-                totalBookings,
-                totalRevenue,
-                confirmed,
-                pending,
-                utilizationRate
-            ));
+                court.Id.ToString(), court.Name,
+                totalBookings, totalRevenue, confirmed, pending, utilizationRate));
         }
 
         return result;
     }
-
-    // ========================================
-    // ✅ STAFF MANAGEMENT
-    // ========================================
 
     public async Task<List<UserDto>> GetStaffByClientAsync(Guid clientId)
     {
@@ -124,11 +103,9 @@ public class AdminService : IAdminService
 
     public async Task<UserDto> CreateStaffAsync(CreateStaffRequest request, Guid clientId)
     {
-        // Check if user already exists for this client
         if (await _db.Users.AnyAsync(u => u.Email == request.Email && u.ClientId == clientId))
             throw new InvalidOperationException("A user with this email already exists for this client.");
 
-        // Check if user exists globally (optional)
         if (await _db.Users.AnyAsync(u => u.Email == request.Email))
             throw new InvalidOperationException("This email is already registered.");
 
@@ -148,6 +125,21 @@ public class AdminService : IAdminService
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
+        // ✅ NEW — audit
+        await _security.LogAsync(new SecurityEvent
+        {
+            ClientId = clientId,
+            EventType = "admin.staff_created",
+            Severity = "info",
+            Message = $"Staff account created: {user.Email}",
+            Metadata = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                staffUserId = user.Id,
+                email = user.Email,
+            }),
+            Success = true,
+        });
+
         return MapToUserDto(user);
     }
 
@@ -159,6 +151,21 @@ public class AdminService : IAdminService
 
         user.Status = status;
         await _db.SaveChangesAsync();
+
+        // ✅ NEW — audit
+        await _security.LogAsync(new SecurityEvent
+        {
+            ClientId = clientId,
+            EventType = "admin.staff_status_changed",
+            Severity = "info",
+            Message = $"Staff status changed: {user.Email} → {status}",
+            Metadata = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                staffUserId = userId,
+                newStatus = status,
+            }),
+            Success = true,
+        });
     }
 
     public async Task DeleteStaffAsync(Guid userId, Guid clientId)
@@ -167,13 +174,26 @@ public class AdminService : IAdminService
             .FirstOrDefaultAsync(u => u.Id == userId && u.ClientId == clientId && u.Role == "staff")
             ?? throw new KeyNotFoundException("Staff member not found");
 
+        var email = user.Email;
+
         _db.Users.Remove(user);
         await _db.SaveChangesAsync();
-    }
 
-    // ========================================
-    // PRIVATE HELPERS
-    // ========================================
+        // ✅ NEW — audit
+        await _security.LogAsync(new SecurityEvent
+        {
+            ClientId = clientId,
+            EventType = "admin.staff_deleted",
+            Severity = "warning",
+            Message = $"Staff account deleted: {email}",
+            Metadata = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                staffUserId = userId,
+                email,
+            }),
+            Success = true,
+        });
+    }
 
     private static UserDto MapToUserDto(User u) => new(
         u.Id.ToString(),

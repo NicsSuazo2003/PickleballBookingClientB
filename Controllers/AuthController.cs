@@ -2,6 +2,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using PickleballBookingSystem.DTOs;
 using PickleballBookingSystem.Interfaces;
 using PickleballBookingSystem.Middleware;
@@ -13,32 +14,32 @@ public class AuthController : ControllerBase
 {
     private readonly IAuthService _auth;
     private readonly ClientResolver _clientResolver;
-    private readonly IClientService _clientService;
 
-    public AuthController(IAuthService auth, ClientResolver clientResolver, IClientService clientService)
+    public AuthController(IAuthService auth, ClientResolver clientResolver)
     {
         _auth = auth;
         _clientResolver = clientResolver;
-        _clientService = clientService;
     }
 
-    private async Task<Guid> GetClientId()
-    {
-        var subdomain = _clientResolver.GetSubdomain();
-        if (string.IsNullOrEmpty(subdomain))
-            throw new UnauthorizedAccessException("Client identification required");
+    private string? Ip =>
+        HttpContext.Connection.RemoteIpAddress?.ToString();
 
-        return await _clientService.GetClientIdBySubdomainAsync(subdomain);
-    }
+    private string? Ua =>
+        Request.Headers["User-Agent"].FirstOrDefault();
+
+    // ✅ NEW — 409 (not 401) on missing tenant, via ResolveClientIdAsync
+    private Task<Guid> GetClientId() => _clientResolver.ResolveClientIdAsync();
 
     [HttpPost("login")]
+    [EnableRateLimiting("auth")]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest request)
     {
-        var response = await _auth.LoginAsync(request);
+        var response = await _auth.LoginAsync(request, Ip, Ua);
         return Ok(response);
     }
 
     [HttpPost("register")]
+    [EnableRateLimiting("auth")]
     public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request)
     {
         var clientId = await GetClientId();
@@ -56,10 +57,24 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("forgot-password")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request)
     {
-        await _auth.ForgotPasswordAsync(request.Email);
-        return Ok(new { message = "If an account exists, a reset link has been sent" });
+        var clientId = await GetClientId();
+        await _auth.ForgotPasswordAsync(request.Email, clientId, Ip, Ua);
+
+        // ✅ Always the same response — no email enumeration
+        return Ok(new { message = "If an account exists with that email, a reset link has been sent." });
+    }
+
+    // ✅ NEW — Fix A: ResetPassword is a real endpoint now
+    [HttpPost("reset-password")]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> ResetPassword(ResetPasswordRequest request)
+    {
+        var clientId = await GetClientId();
+        await _auth.ResetPasswordAsync(request, clientId, Ip, Ua);
+        return Ok(new { message = "Password has been reset. You can now sign in." });
     }
 
     [Authorize, HttpPut("profile")]

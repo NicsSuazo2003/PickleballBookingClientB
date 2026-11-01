@@ -12,40 +12,21 @@ public class OpenPlayController : ControllerBase
 {
     private readonly IOpenPlayService _openPlay;
     private readonly ClientResolver _clientResolver;
-    private readonly IClientService _clientService;
 
-    public OpenPlayController(
-        IOpenPlayService openPlay,
-        ClientResolver clientResolver,
-        IClientService clientService)
+    public OpenPlayController(IOpenPlayService openPlay, ClientResolver clientResolver)
     {
         _openPlay = openPlay;
         _clientResolver = clientResolver;
-        _clientService = clientService;
     }
 
-    private async Task<Guid> GetClientId()
-    {
-        var subdomain = _clientResolver.GetSubdomain();
-        if (string.IsNullOrEmpty(subdomain))
-            throw new UnauthorizedAccessException("Client identification required");
-
-        try
-        {
-            return await _clientService.GetClientIdBySubdomainAsync(subdomain);
-        }
-        catch (KeyNotFoundException)
-        {
-            throw new UnauthorizedAccessException($"Client not found for subdomain: {subdomain}");
-        }
-    }
+    // ✅ Fix: 409 (not 401) on missing tenant
+    private Task<Guid> GetClientId() => _clientResolver.ResolveClientIdAsync();
 
     [HttpGet("open-play")]
     public async Task<ActionResult<List<OpenPlaySessionDto>>> GetAll()
     {
         var clientId = await GetClientId();
-        var sessions = await _openPlay.GetUpcomingSessionsAsync(clientId);
-        return Ok(sessions);
+        return Ok(await _openPlay.GetUpcomingSessionsAsync(clientId));
     }
 
     [HttpGet("open-play/{id}")]
@@ -56,10 +37,7 @@ public class OpenPlayController : ControllerBase
         if (session == null) return NotFound(new { message = "Open Play session not found" });
         return Ok(session);
     }
-    /// <summary>
-    /// Public roster for an Open Play session. Returns first-name + last-initial only.
-    /// No authentication required — this is what the public session details modal uses.
-    /// </summary>
+
     [HttpGet("open-play/{id}/players/public")]
     public async Task<ActionResult<List<PublicOpenPlayPlayerDto>>> GetPublicPlayers(Guid id)
     {
@@ -67,13 +45,11 @@ public class OpenPlayController : ControllerBase
 
         try
         {
-            var players = await _openPlay.GetPublicPlayersAsync(id, clientId);
-            return Ok(players);
+            return Ok(await _openPlay.GetPublicPlayersAsync(id, clientId));
         }
         catch (KeyNotFoundException)
         {
-            // Return 404 for both "session not found" and "session ended" so we don't
-            // leak whether a session ever existed to anonymous callers.
+            // 404 for both "not found" and "ended" — no existence leak
             return NotFound(new { message = "Open Play session not found" });
         }
     }
@@ -82,8 +58,7 @@ public class OpenPlayController : ControllerBase
     public async Task<ActionResult<BookingDto>> Join(Guid id, JoinOpenPlayRequest request)
     {
         var clientId = await GetClientId();
-        var booking = await _openPlay.JoinSessionAsync(id, request, clientId);
-        return Ok(booking);
+        return Ok(await _openPlay.JoinSessionAsync(id, request, clientId));
     }
 
     [Authorize(Roles = "admin")]
@@ -91,8 +66,7 @@ public class OpenPlayController : ControllerBase
     public async Task<ActionResult<List<OpenPlaySessionDto>>> AdminGetAll()
     {
         var clientId = await GetClientId();
-        var sessions = await _openPlay.AdminGetAllSessionsAsync(clientId);
-        return Ok(sessions);
+        return Ok(await _openPlay.AdminGetAllSessionsAsync(clientId));
     }
 
     [Authorize(Roles = "admin")]
@@ -109,8 +83,7 @@ public class OpenPlayController : ControllerBase
     public async Task<ActionResult<OpenPlaySessionDto>> AdminUpdate(Guid id, UpdateOpenPlaySessionRequest request)
     {
         var clientId = await GetClientId();
-        var session = await _openPlay.AdminUpdateSessionAsync(id, request, clientId);
-        return Ok(session);
+        return Ok(await _openPlay.AdminUpdateSessionAsync(id, request, clientId));
     }
 
     [Authorize(Roles = "admin")]
@@ -127,8 +100,7 @@ public class OpenPlayController : ControllerBase
     public async Task<ActionResult<List<OpenPlayPlayerDto>>> AdminGetPlayers(Guid id)
     {
         var clientId = await GetClientId();
-        var players = await _openPlay.AdminGetPlayersAsync(id, clientId);
-        return Ok(players);
+        return Ok(await _openPlay.AdminGetPlayersAsync(id, clientId));
     }
 
     [Authorize(Roles = "admin")]
@@ -136,7 +108,6 @@ public class OpenPlayController : ControllerBase
     public async Task<ActionResult<OpenPlaySessionStatsDto>> AdminGetStats(Guid id)
     {
         var clientId = await GetClientId();
-        var stats = await _openPlay.AdminGetSessionStatsAsync(id, clientId);
-        return Ok(stats);
+        return Ok(await _openPlay.AdminGetSessionStatsAsync(id, clientId));
     }
 }

@@ -624,4 +624,47 @@ public class EmailService
             _logger.LogError(ex, "Reschedule email notification failed");
         }
     }
+    // ═════════════════════════════════════════════════════════════
+    // 7. CUSTOMER — Password Reset
+    // ═════════════════════════════════════════════════════════════
+    public async Task SendPasswordResetEmailAsync(string toEmail, string toName, string resetToken)
+    {
+        try
+        {
+            var apiKey = _config["Brevo:ApiKey"];
+            var senderEmail = _config["Brevo:SenderEmail"];
+            var senderName = _config["Brevo:SenderName"];
+            var frontendUrl = _config["App:FrontendUrl"];
+
+            var resetUrl = $"{frontendUrl}/reset-password?token={Uri.EscapeDataString(resetToken)}";
+
+            var content = $@"
+              <p style='margin:0 0 8px;font-size:15px;color:{TEXT_CREAM_SOFT};'>
+                Hi {toName},
+              </p>
+              <p style='margin:0 0 24px;font-size:15px;line-height:1.65;color:{TEXT_CREAM_SOFT};'>
+                We received a request to reset your password. Click below to choose a new one.
+                This link expires in <strong style='color:{ACCENT}'>60 minutes</strong>.
+              </p>
+
+              {CtaButton(resetUrl, "Reset Password")}
+
+              <p style='margin:24px 0 0;font-size:13px;line-height:1.65;color:{TEXT_CREAM_MUTED};'>
+                If you didn't request this, you can safely ignore this email — your password won't change.
+              </p>
+
+              <p style='margin:16px 0 0;font-size:12px;line-height:1.65;color:{TEXT_CREAM_MUTED};word-break:break-all;'>
+                Or paste this link into your browser:<br>{resetUrl}
+              </p>
+            ";
+
+            var html = WrapLayout("Reset Your Password", content);
+            await SendAsync(apiKey, senderEmail, senderName, toEmail, toName,
+                "🔒 Reset your Paddle Place password", html);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Password reset email failed for {Email}", toEmail);
+        }
+    }
 }
